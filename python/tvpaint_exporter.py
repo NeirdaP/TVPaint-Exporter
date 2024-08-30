@@ -3,6 +3,7 @@ import tempfile
 import time
 import ftplib
 import re
+import gazu
 
 import pytvpaint.george
 from pytvpaint.project import Project
@@ -53,26 +54,66 @@ def do_transfer(filepath, output_name, curr_dir, conn):
             do_transfer(filepath, output_name, curr_dir, conn)
 
 
-def get_server_output_root(filename):
+def get_server_output_root(tokens):
     """
      Project-specific logic to parse tokens from filename and
      return the output dir where layers will be written
     """
     
-    shot = re.search("SHO[0-9]{3}", filename)
+    shot = tokens.get("shot")
     if not shot:
         print("Error: shot could not be parsed from filename \
               (expecting SHOXXX), please correct in order to export")
         quit()
     
     # Path starts from root of the FTP server
-    return "/5_COMPOSITING/{}/RENDER_LAYERS".format(shot.group())
+    return "/5_COMPOSITING/{}/RENDER_LAYERS".format(shot)
+
+
+def parse_tokens(filename):
+    # Parse tokens such as shot, seq, etc as needed from filename
+    tokens = {}
+    tokens["project"] = "T.WOF"
+    tokens["sequence"] = "SQ01"
+    shot = re.search("SHO[0-9]{3}", filename) 
+    tokens["shot"] = shot.group() if shot else None
+    return tokens
+
+
+def publish_to_kitsu(filepath, tokens):
+    """
+    Seek the related animation task, create comment and upload media
+    """
+    try:
+        kitsu_url = "https://kitsu.supamonks.com/"
+        gazu.set_host("{}/api".format(kitsu_url))
+        gazu.set_event_host(kitsu_url)
+        gazu.log_in("supaservice@supamonks.com", "supamonk09,")
+
+        # Seek the current shot from the project and retrieve its tasks
+        proj = gazu.project.get_project_by_name(tokens.get("project"))
+        seq = gazu.shot.get_sequence_by_name(proj, tokens.get("sequence"))
+        shot = gazu.shot.get_shot_by_name(seq, tokens.get("shot"))
+        tasks = gazu.task.all_tasks_for_shot(shot)
+
+        task_to_update = [task for task in tasks if task.get("task_type_name") == "Animation"][0]
+        comment = gazu.task.add_comment(task_to_update, task_to_update.get('task_status_id'), 
+                                        comment="Uploaded by TVpaint render layer export tool")
+        gazu.task.add_preview(
+            task_to_update,
+            comment,
+            preview_file_path=filepath
+        )
+    except Exception as e:
+        print("Unable to upload media to kitsu: {}".format(e))
 
 
 if __name__ == "__main__":
     project = Project.current_project()
-    server_output_root = get_server_output_root(os.path.basename(project.path))
-
+    filename = os.path.basename(project.path)
+    tokens = parse_tokens(filename)
+    server_output_root = get_server_output_root(tokens)
+    
     with Explicit_FTP_TLS(host=FTP_URL, user=FTP_USER, passwd=FTP_MDP) as ftps:
         ftps.set_pasv(True)
         ftps.prot_p()
@@ -109,5 +150,13 @@ if __name__ == "__main__":
                             print("Copying over file path: {}".format(full_file_path))
                             do_transfer(full_file_path, image, layer_export_dossier, ftps)
                         
+            # Export and copy flattened movie of all layers
+            tmp_movie_output = "{}/{}.mp4".format(tmpdir, filename.split(".")[0])
+            project.render(tmp_movie_output) 
+            ftps.cwd(server_output_root) 
+            do_transfer(tmp_movie_output, os.path.basename(tmp_movie_output), server_output_root, ftps)
+
+            # Upload movie to kitsu
+            publish_to_kitsu(tmp_movie_output, tokens)            
     
     print("Done exporting all layers in the project")

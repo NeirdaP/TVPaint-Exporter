@@ -1,0 +1,15 @@
+*.pyc
+*.pyo
+*.spec
+*.sublime-project
+*.sublime-workspace
+*.log
+.idea
+.ssh_key
+.ssh_key.pub
+env
+.pytest_cache
+prof
+.vscode/
+dist/
+build/

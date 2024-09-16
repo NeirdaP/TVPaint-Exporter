@@ -63,7 +63,8 @@ def get_server_output_roots(tokens):
     shot = tokens.get("shot")
     if not shot:
         print("Error: shot could not be parsed from filename (expecting SHOXXX), "
-              "please fix the filename in order to export.")
+              "please fix the filename in order to export. \nPress Enter to close...")
+        input()
         sys.exit(0)
     
     # Paths start from root of the FTP server
@@ -85,30 +86,26 @@ def publish_to_kitsu(filepath, tokens):
     """
     Seek the related animation task, create comment and upload media
     """
-    try:
-        kitsu_url = "https://kitsu.supamonks.com/"
-        gazu.set_host("{}/api".format(kitsu_url))
-        gazu.set_event_host(kitsu_url)
-        gazu.log_in("supaservice@supamonks.com", "8dGYZqby!$JqWy")
+    kitsu_url = "https://kitsu.supamonks.com/"
+    gazu.set_host("{}/api".format(kitsu_url))
+    gazu.set_event_host(kitsu_url)
+    gazu.log_in("supaservice@supamonks.com", "8dGYZqby!$JqWy")
 
-        # Seek the current shot from the project and retrieve its tasks
-        proj = gazu.project.get_project_by_name(tokens.get("project"))
-        seq = gazu.shot.get_sequence_by_name(proj, tokens.get("sequence"))
-        shot = gazu.shot.get_shot_by_name(seq, tokens.get("shot"))
-        tasks = gazu.task.all_tasks_for_shot(shot)
+    # Seek the current shot from the project and retrieve its tasks
+    proj = gazu.project.get_project_by_name(tokens.get("project"))
+    seq = gazu.shot.get_sequence_by_name(proj, tokens.get("sequence"))
+    shot = gazu.shot.get_shot_by_name(seq, tokens.get("shot"))
+    tasks = gazu.task.all_tasks_for_shot(shot)
 
-        task_to_update = [task for task in tasks if task.get("task_type_name") == "Animation"][0]
-        to_check_status = gazu.task.get_task_status_by_name("To Check")
-        comment = gazu.task.add_comment(task_to_update, to_check_status, 
-                                        comment="Uploaded by TVpaint render layer export tool")
-        gazu.task.add_preview(
-            task_to_update,
-            comment,
-            preview_file_path=filepath
-        )
-    except Exception as e:
-        print("Unable to upload media to kitsu: {}".format(e))
-
+    task_to_update = [task for task in tasks if task.get("task_type_name") == "Animation"][0]
+    to_check_status = gazu.task.get_task_status_by_name("To Check")
+    comment = gazu.task.add_comment(task_to_update, to_check_status, 
+                                    comment="Uploaded by TVpaint render layer export tool")
+    gazu.task.add_preview(
+        task_to_update,
+        comment,
+        preview_file_path=filepath
+    )
 
 if __name__ == "__main__":
     project = Project.current_project()
@@ -141,7 +138,11 @@ if __name__ == "__main__":
                         tmp_output_path = os.path.join(tmp_output_dir, "{}.#.png".format(layer_name_clean))
 
                         with render_context(background_mode=pytvpaint.george.BackgroundMode.NONE):
-                            layer.render(output_path=tmp_output_path, start=project.start_frame, end=project.end_frame)
+                            try:
+                                layer.render(output_path=tmp_output_path, start=project.start_frame, end=project.end_frame)
+                            except Exception as e:
+                                print("Failed to export layer {}: {}".format(layer, e))
+                                continue
 
                         # For now, all shot layers export to same dir regardless of clip or scene
                         layer_export_dossier = "{}/{}".format(layer_output_root, layer_name_clean)
@@ -158,12 +159,18 @@ if __name__ == "__main__":
             # Export and copy flattened movie of all layers
             print("Rendering all layers to movie...")
             tmp_movie_output = "{}/{}.mp4".format(tmpdir, filename.split(".")[0])
-            project.render(tmp_movie_output, use_camera=True) 
-            ftps.cwd(movie_output_root) 
-            do_transfer(tmp_movie_output, os.path.basename(tmp_movie_output), movie_output_root, ftps)
+            try:
+                project.render(tmp_movie_output, use_camera=True) 
+                ftps.cwd(movie_output_root) 
+                do_transfer(tmp_movie_output, os.path.basename(tmp_movie_output), movie_output_root, ftps)
 
-            # Upload movie to kitsu
-            print("Updating kitsu...")
-            publish_to_kitsu(tmp_movie_output, tokens)
+                # Upload movie to kitsu
+                print("Updating kitsu...")
+                publish_to_kitsu(tmp_movie_output, tokens)
+            except Exception as e:
+                print("Movie export and upload to kitsu failed: {}".format(e))
+                print("Press Enter to close...")
+                input()
+                sys.exit(0)
     
     print("Done exporting all layers in the project")

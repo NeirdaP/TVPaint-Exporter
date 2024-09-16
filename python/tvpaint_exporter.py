@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 import time
 import ftplib
@@ -61,9 +62,9 @@ def get_server_output_roots(tokens):
     """
     shot = tokens.get("shot")
     if not shot:
-        print("Error: shot could not be parsed from filename \
-              (expecting SHOXXX), please correct in order to export")
-        quit()
+        print("Error: shot could not be parsed from filename (expecting SHOXXX), "
+              "please fix the filename in order to export.")
+        sys.exit(0)
     
     # Paths start from root of the FTP server
     return ("/5_COMPOSITING/{}/RENDER_LAYERS".format(shot), 
@@ -88,7 +89,7 @@ def publish_to_kitsu(filepath, tokens):
         kitsu_url = "https://kitsu.supamonks.com/"
         gazu.set_host("{}/api".format(kitsu_url))
         gazu.set_event_host(kitsu_url)
-        gazu.log_in("supaservice@supamonks.com", "supamonk09,")
+        gazu.log_in("supaservice@supamonks.com", "8dGYZqby!$JqWy")
 
         # Seek the current shot from the project and retrieve its tasks
         proj = gazu.project.get_project_by_name(tokens.get("project"))
@@ -157,7 +158,7 @@ if __name__ == "__main__":
             # Export and copy flattened movie of all layers
             print("Rendering all layers to movie...")
             tmp_movie_output = "{}/{}.mp4".format(tmpdir, filename.split(".")[0])
-            project.render(tmp_movie_output) 
+            project.render(tmp_movie_output, use_camera=True) 
             ftps.cwd(movie_output_root) 
             do_transfer(tmp_movie_output, os.path.basename(tmp_movie_output), movie_output_root, ftps)
 

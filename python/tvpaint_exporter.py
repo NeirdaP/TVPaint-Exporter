@@ -69,7 +69,7 @@ def get_server_output_roots(tokens):
     
     # Paths start from root of the FTP server
     return ("/5_COMPOSITING/{}/RENDER_LAYERS".format(shot), 
-            "/5_COMPOSITING/{}/OUTPUTS".format(shot))
+            "/2_ANIM/{}/OUTPUTS".format(shot))
 
 
 def parse_tokens(filename):
@@ -128,7 +128,7 @@ if __name__ == "__main__":
         with tempfile.TemporaryDirectory() as tmpdir:
             for scene in project.scenes:
                 for clip in scene.clips:
-                    layers_completed = 0
+                    layers_completed = 1
                     for layer in clip.layers:
 
                         # Render each layer to tmp dir, then copy to server

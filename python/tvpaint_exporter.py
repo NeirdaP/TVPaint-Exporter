@@ -107,6 +107,61 @@ def publish_to_kitsu(filepath, tokens):
         preview_file_path=filepath
     )
 
+
+def render_layers():
+    """
+    Render each layer in project to tmp dir, then copy to server
+    """
+    for scene in project.scenes:
+        for clip in scene.clips:
+            layers_completed = 1
+            for layer in clip.layers:
+                layer_name_clean = layer.name.replace(" ", "_")
+                print("Processing layer {} ({}/{})...".format(layer_name_clean, layers_completed, len(list(clip.layers))))
+                tmp_output_dir = os.path.join(tmpdir, layer_name_clean)
+                tmp_output_path = os.path.join(tmp_output_dir, "{}.#.png".format(layer_name_clean))
+
+                with render_context(background_mode=pytvpaint.george.BackgroundMode.NONE):
+                    try:
+                        layer.render(output_path=tmp_output_path, start=project.start_frame, end=project.end_frame)
+                    except Exception as e:
+                        print("Failed to export layer {}: {}".format(layer, e))
+                        continue
+
+                # For now, all shot layers export to same dir regardless of clip or scene
+                layer_export_dossier = "{}/{}".format(layer_output_root, layer_name_clean)
+                ftps.mkd(layer_export_dossier)  
+                ftps.cwd(layer_export_dossier)
+
+                images = os.listdir(tmp_output_dir)
+                print("Copying layer files to server")
+                for image in images:
+                    full_file_path = '{}/{}'.format(tmp_output_dir, image)
+                    do_transfer(full_file_path, image, layer_export_dossier, ftps)
+                layers_completed += 1
+
+
+def render_movie():
+    """
+    Export and copy to server flattened movie of all layers
+    """
+    print("Rendering all layers to movie...")
+    tmp_movie_output = "{}/{}.mp4".format(tmpdir, filename.split(".")[0])
+    try:
+        project.render(tmp_movie_output, use_camera=True) 
+        ftps.cwd(movie_output_root) 
+        do_transfer(tmp_movie_output, os.path.basename(tmp_movie_output), movie_output_root, ftps)
+
+        # Upload movie to kitsu
+        print("Updating kitsu...")
+        publish_to_kitsu(tmp_movie_output, tokens)
+    except Exception as e:
+        print("Movie export and upload to kitsu failed: {}".format(e))
+        print("Press Enter to close...")
+        input()
+        sys.exit(0)
+
+
 if __name__ == "__main__":
     project = Project.current_project()
     filename = os.path.basename(project.path)
@@ -133,51 +188,7 @@ if __name__ == "__main__":
 
         with tempfile.TemporaryDirectory() as tmpdir:
             if (mode == "1"):
-                for scene in project.scenes:
-                    for clip in scene.clips:
-                        layers_completed = 1
-                        for layer in clip.layers:
+                render_layers()
+            render_movie()
 
-                            # Render each layer to tmp dir, then copy to server
-                            layer_name_clean = layer.name.replace(" ", "_")
-                            print("Processing layer {} ({}/{})...".format(layer_name_clean, layers_completed, len(list(clip.layers))))
-                            tmp_output_dir = os.path.join(tmpdir, layer_name_clean)
-                            tmp_output_path = os.path.join(tmp_output_dir, "{}.#.png".format(layer_name_clean))
-
-                            with render_context(background_mode=pytvpaint.george.BackgroundMode.NONE):
-                                try:
-                                    layer.render(output_path=tmp_output_path, start=project.start_frame, end=project.end_frame)
-                                except Exception as e:
-                                    print("Failed to export layer {}: {}".format(layer, e))
-                                    continue
-
-                            # For now, all shot layers export to same dir regardless of clip or scene
-                            layer_export_dossier = "{}/{}".format(layer_output_root, layer_name_clean)
-                            ftps.mkd(layer_export_dossier)  
-                            ftps.cwd(layer_export_dossier)
-
-                            images = os.listdir(tmp_output_dir)
-                            print("Copying layer files to server")
-                            for image in images:
-                                full_file_path = '{}/{}'.format(tmp_output_dir, image)
-                                do_transfer(full_file_path, image, layer_export_dossier, ftps)
-                            layers_completed += 1            
-                        
-            # Export and copy flattened movie of all layers
-            print("Rendering all layers to movie...")
-            tmp_movie_output = "{}/{}.mp4".format(tmpdir, filename.split(".")[0])
-            try:
-                project.render(tmp_movie_output, use_camera=True) 
-                ftps.cwd(movie_output_root) 
-                do_transfer(tmp_movie_output, os.path.basename(tmp_movie_output), movie_output_root, ftps)
-
-                # Upload movie to kitsu
-                print("Updating kitsu...")
-                publish_to_kitsu(tmp_movie_output, tokens)
-            except Exception as e:
-                print("Movie export and upload to kitsu failed: {}".format(e))
-                print("Press Enter to close...")
-                input()
-                sys.exit(0)
-    
     print("Done exporting all layers in the project")

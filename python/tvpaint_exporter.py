@@ -1,8 +1,10 @@
 import os
+import sys
 import tempfile
 import time
 import ftplib
 import re
+import gazu
 
 import pytvpaint.george
 from pytvpaint.project import Project
@@ -53,61 +55,140 @@ def do_transfer(filepath, output_name, curr_dir, conn):
             do_transfer(filepath, output_name, curr_dir, conn)
 
 
-def get_server_output_root(filename):
+def get_server_output_roots(tokens):
     """
-     Project-specific logic to parse tokens from filename and
-     return the output dir where layers will be written
+     Project-specific logic to use filename tokens to return 
+     the output dirs where layers and movie will be written
     """
-    
-    shot = re.search("SHO[0-9]{3}", filename)
+    shot = tokens.get("shot")
     if not shot:
-        print("Error: shot could not be parsed from filename \
-              (expecting SHOXXX), please correct in order to export")
-        quit()
+        print("Error: shot could not be parsed from filename (expecting SHOXXX), "
+              "please fix the filename in order to export. \nPress Enter to close...")
+        input()
+        sys.exit(0)
     
-    # Path starts from root of the FTP server
-    return "/5_COMPOSITING/{}/RENDER_LAYERS".format(shot.group())
+    # Paths start from root of the FTP server
+    return ("/5_COMPOSITING/{}/RENDER_LAYERS".format(shot), 
+            "/2_ANIM/{}/OUTPUTS".format(shot))
+
+
+def parse_tokens(filename):
+    # Project-specific logic to parse tokens such as shot etc as needed from filename
+    tokens = {}
+    tokens["project"] = "T.WOF"
+    tokens["sequence"] = "SQ001"
+    shot = re.search("SHO[0-9]{3}", filename) 
+    tokens["shot"] = shot.group() if shot else None
+    return tokens
+
+
+def publish_to_kitsu(filepath, tokens):
+    """
+    Seek the related animation task, create comment and upload media
+    """
+    kitsu_url = "https://kitsu.supamonks.com/"
+    gazu.set_host("{}/api".format(kitsu_url))
+    gazu.set_event_host(kitsu_url)
+    gazu.log_in("supaservice@supamonks.com", "8dGYZqby!$JqWy")
+
+    # Seek the current shot from the project and retrieve its tasks
+    proj = gazu.project.get_project_by_name(tokens.get("project"))
+    seq = gazu.shot.get_sequence_by_name(proj, tokens.get("sequence"))
+    shot = gazu.shot.get_shot_by_name(seq, tokens.get("shot"))
+    tasks = gazu.task.all_tasks_for_shot(shot)
+
+    task_to_update = [task for task in tasks if task.get("task_type_name") == "Animation"][0]
+    to_check_status = gazu.task.get_task_status_by_name("To Check")
+    comment = gazu.task.add_comment(task_to_update, to_check_status, 
+                                    comment="Uploaded by TVpaint render layer export tool")
+    gazu.task.add_preview(
+        task_to_update,
+        comment,
+        preview_file_path=filepath
+    )
+
+
+def render_layers():
+    """
+    Render each layer in project to tmp dir, then copy to server
+    """
+    for scene in project.scenes:
+        for clip in scene.clips:
+            layers_completed = 1
+            for layer in clip.layers:
+                layer_name_clean = layer.name.replace(" ", "_")
+                print("Processing layer {} ({}/{})...".format(layer_name_clean, layers_completed, len(list(clip.layers))))
+                tmp_output_dir = os.path.join(tmpdir, layer_name_clean)
+                tmp_output_path = os.path.join(tmp_output_dir, "{}.#.png".format(layer_name_clean))
+
+                with render_context(background_mode=pytvpaint.george.BackgroundMode.NONE):
+                    try:
+                        layer.render(output_path=tmp_output_path, start=project.start_frame, end=project.end_frame)
+                    except Exception as e:
+                        print("Failed to export layer {}: {}".format(layer, e))
+                        continue
+
+                # For now, all shot layers export to same dir regardless of clip or scene
+                layer_export_dossier = "{}/{}".format(layer_output_root, layer_name_clean)
+                ftps.mkd(layer_export_dossier)  
+                ftps.cwd(layer_export_dossier)
+
+                images = os.listdir(tmp_output_dir)
+                print("Copying layer files to server")
+                for image in images:
+                    full_file_path = '{}/{}'.format(tmp_output_dir, image)
+                    do_transfer(full_file_path, image, layer_export_dossier, ftps)
+                layers_completed += 1
+
+
+def render_movie():
+    """
+    Export and copy to server flattened movie of all layers
+    """
+    print("Rendering all layers to movie...")
+    tmp_movie_output = "{}/{}.mp4".format(tmpdir, filename.split(".")[0])
+    try:
+        project.render(tmp_movie_output, use_camera=True) 
+        ftps.cwd(movie_output_root) 
+        do_transfer(tmp_movie_output, os.path.basename(tmp_movie_output), movie_output_root, ftps)
+
+        # Upload movie to kitsu
+        print("Updating kitsu...")
+        publish_to_kitsu(tmp_movie_output, tokens)
+    except Exception as e:
+        print("Movie export and upload to kitsu failed: {}".format(e))
+        print("Press Enter to close...")
+        input()
+        sys.exit(0)
 
 
 if __name__ == "__main__":
     project = Project.current_project()
-    server_output_root = get_server_output_root(os.path.basename(project.path))
-
+    filename = os.path.basename(project.path)
+    tokens = parse_tokens(filename)
+    layer_output_root, movie_output_root = get_server_output_roots(tokens)
+    
+    # Prompt the user for which mode to run the tool in 
+    mode = None
+    while (mode not in ["1", "2"]):
+        print("Sélectionnez un mode:\n1 - Render Layers and Anim Movie\n2 - Render Anim Movie Only")
+        mode = input()
+    
     with Explicit_FTP_TLS(host=FTP_URL, user=FTP_USER, passwd=FTP_MDP) as ftps:
         ftps.set_pasv(True)
         ftps.prot_p()
 
-        # Make sure all directories on output path exist
-        dirs = server_output_root.strip("/").split("/")
-        curr_path = ""
-        for dir in dirs:
-            curr_path = curr_path + "/" + dir
-            ftps.mkd(curr_path)
+        # Make sure all directories on output paths exist
+        for path in [layer_output_root, movie_output_root]:
+            dirs = path.strip("/").split("/")
+            curr_path = ""
+            for dir in dirs:
+                curr_path = curr_path + "/" + dir
+                ftps.mkd(curr_path)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            for scene in project.scenes:
-                for clip in scene.clips:
-                    for layer in clip.layers:
+            if (mode == "1"):
+                render_layers()
+            render_movie()
 
-                        # Render each layer to tmp dir, then copy to server
-                        layer_name_clean = layer.name.replace(" ", "_")
-                        print("processing layer: {}".format(layer_name_clean))
-                        tmp_output_dir = os.path.join(tmpdir, layer_name_clean)
-                        tmp_output_path = os.path.join(tmp_output_dir, "{}.#.png".format(layer_name_clean))
-
-                        with render_context(background_mode=pytvpaint.george.BackgroundMode.NONE):
-                            layer.render(output_path=tmp_output_path, start=project.start_frame, end=project.end_frame)
-
-                        # For now, all shot layers export to same dir regardless of clip or scene
-                        layer_export_dossier = "{}/{}".format(server_output_root, layer_name_clean)
-                        ftps.mkd(layer_export_dossier)  
-                        ftps.cwd(layer_export_dossier)
-
-                        images = os.listdir(tmp_output_dir)
-                        for image in images:
-                            full_file_path = '{}/{}'.format(tmp_output_dir, image)
-                            print("Copying over file path: {}".format(full_file_path))
-                            do_transfer(full_file_path, image, layer_export_dossier, ftps)
-                        
-    
     print("Done exporting all layers in the project")

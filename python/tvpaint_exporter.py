@@ -5,14 +5,14 @@ import time
 import ftplib
 import re
 import gazu
+import json
 
 import pytvpaint.george
 from pytvpaint.project import Project
 from pytvpaint.utils import render_context
 
-FTP_URL = 'ftp.supamonks.com'
-FTP_USER = 'WOF'
-FTP_MDP = '5k3atKva2D2poU'
+FTP_URL = "ftp.supamonks.com"
+FTP_CONFIG_PATH = "./ftp_config.json"
 MAX_RETRIES = 2
 
 
@@ -55,6 +55,18 @@ def do_transfer(filepath, output_name, curr_dir, conn):
             do_transfer(filepath, output_name, curr_dir, conn)
 
 
+def get_user_ftp_login_info():
+    with open(FTP_CONFIG_PATH, 'r') as file:
+        content = file.read()
+    try:
+        content = json.loads(content)
+    except ValueError as e:
+        print("The ftp config file %r is unreadable\n%r" % (FTP_CONFIG_PATH, e))
+        return (None, None)
+
+    return (content.get("username"), content.get("password"))
+
+
 def get_server_output_roots(tokens):
     """
      Project-specific logic to use filename tokens to return 
@@ -62,22 +74,22 @@ def get_server_output_roots(tokens):
     """
     shot = tokens.get("shot")
     if not shot:
-        print("Error: shot could not be parsed from filename (expecting SHOXXX), "
+        print("Error: shot could not be parsed from filename (expecting SHXXX), "
               "please fix the filename in order to export. \nPress Enter to close...")
         input()
         sys.exit(0)
     
     # Paths start from root of the FTP server
     return ("/5_COMPOSITING/{}/RENDER_LAYERS".format(shot), 
-            "/2_ANIM/{}/OUTPUTS".format(shot))
+            "/2_ANIMATION/{}/OUTPUTS".format(shot))
 
 
 def parse_tokens(filename):
     # Project-specific logic to parse tokens such as shot etc as needed from filename
     tokens = {}
-    tokens["project"] = "T.WOF"
-    tokens["sequence"] = "SQ001"
-    shot = re.search("SHO[0-9]{3}", filename) 
+    tokens["project"] = "PFLE_02"
+    tokens["sequence"] = "SQ1"
+    shot = re.search("SH[0-9]{3}", filename) 
     tokens["shot"] = shot.group() if shot else None
     return tokens
 
@@ -129,15 +141,15 @@ def render_layers():
                         continue
 
                 # For now, all shot layers export to same dir regardless of clip or scene
-                layer_export_dossier = "{}/{}".format(layer_output_root, layer_name_clean)
-                ftps.mkd(layer_export_dossier)  
-                ftps.cwd(layer_export_dossier)
+                layer_export_folder = "{}/{}".format(layer_output_root, layer_name_clean)
+                ftps.mkd(layer_export_folder)  
+                ftps.cwd(layer_export_folder)
 
                 images = os.listdir(tmp_output_dir)
                 print("Copying layer files to server")
                 for image in images:
                     full_file_path = '{}/{}'.format(tmp_output_dir, image)
-                    do_transfer(full_file_path, image, layer_export_dossier, ftps)
+                    do_transfer(full_file_path, image, layer_export_folder, ftps)
                 layers_completed += 1
 
 
@@ -167,6 +179,13 @@ if __name__ == "__main__":
     filename = os.path.basename(project.path)
     tokens = parse_tokens(filename)
     layer_output_root, movie_output_root = get_server_output_roots(tokens)
+    ftp_user, ftp_mdp = get_user_ftp_login_info()
+    
+    if not ftp_user or not ftp_mdp:
+        print("Username and/or password missing from config file. Check ftp_config.json")
+        print("Press Enter to close...")
+        input()
+        sys.exit(0)
     
     # Prompt the user for which mode to run the tool in 
     mode = None
@@ -174,7 +193,7 @@ if __name__ == "__main__":
         print("Sélectionnez un mode:\n1 - Render Layers and Anim Movie\n2 - Render Anim Movie Only")
         mode = input()
     
-    with Explicit_FTP_TLS(host=FTP_URL, user=FTP_USER, passwd=FTP_MDP) as ftps:
+    with Explicit_FTP_TLS(host=FTP_URL, user=ftp_user, passwd=ftp_mdp) as ftps:
         ftps.set_pasv(True)
         ftps.prot_p()
 

@@ -47,7 +47,7 @@ def do_transfer(filepath, output_name, curr_dir, conn):
             # allow OS to release port
             time.sleep(2)
             conn.connect(FTP_URL)
-            conn.login(FTP_USER, FTP_MDP)
+            conn.login(ftp_user, ftp_password)
             conn.prot_p()
             conn.cwd('{}'.format(curr_dir))
             print("FTP connection has been reset")
@@ -179,9 +179,9 @@ if __name__ == "__main__":
     filename = os.path.basename(project.path)
     tokens = parse_tokens(filename)
     layer_output_root, movie_output_root = get_server_output_roots(tokens)
-    ftp_user, ftp_mdp = get_user_ftp_login_info()
+    ftp_user, ftp_password = get_user_ftp_login_info()
     
-    if not ftp_user or not ftp_mdp:
+    if not ftp_user or not ftp_password:
         print("Username and/or password missing from config file. Check ftp_config.json")
         print("Press Enter to close...")
         input()
@@ -193,7 +193,7 @@ if __name__ == "__main__":
         print("Sélectionnez un mode:\n1 - Render Layers and Anim Movie\n2 - Render Anim Movie Only")
         mode = input()
     
-    with Explicit_FTP_TLS(host=FTP_URL, user=ftp_user, passwd=ftp_mdp) as ftps:
+    with Explicit_FTP_TLS(host=FTP_URL, user=ftp_user, passwd=ftp_password) as ftps:
         ftps.set_pasv(True)
         ftps.prot_p()
 

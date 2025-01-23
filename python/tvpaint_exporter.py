@@ -126,31 +126,25 @@ def render_layers():
     """
     for scene in project.scenes:
         for clip in scene.clips:
-            layers_completed = 1
-            for layer in clip.layers:
-                layer_name_clean = layer.name.replace(" ", "_")
-                print("Processing layer {} ({}/{})...".format(layer_name_clean, layers_completed, len(list(clip.layers))))
-                tmp_output_dir = os.path.join(tmpdir, layer_name_clean)
-                tmp_output_path = os.path.join(tmp_output_dir, "{}.#.png".format(layer_name_clean))
-
+            for frame in range(project.start_frame, project.end_frame+1):
+                tmp_output_path = os.path.join(tmpdir, "{}.{}.psd".format(
+                    os.path.splitext(filename)[0].replace(" ", "_"), "{:04d}".format(frame)))
                 with render_context(background_mode=pytvpaint.george.BackgroundMode.NONE):
                     try:
-                        layer.render(output_path=tmp_output_path, start=project.start_frame, end=project.end_frame)
+                        print("Rendering frame {} of {}".format(frame, project.end_frame))
+                        clip.render(output_path=tmp_output_path, start=frame, end=frame)
                     except Exception as e:
-                        print("Failed to export layer {}: {}".format(layer, e))
+                        print("Failed to export clip: {}".format(e))
                         continue
 
-                # For now, all shot layers export to same dir regardless of clip or scene
-                layer_export_folder = "{}/{}".format(layer_output_root, layer_name_clean)
-                ftps.mkd(layer_export_folder)  
-                ftps.cwd(layer_export_folder)
+            ftps.mkd(layer_output_root)  
+            ftps.cwd(layer_output_root)
 
-                images = os.listdir(tmp_output_dir)
-                print("Copying layer files to server")
-                for image in images:
-                    full_file_path = '{}/{}'.format(tmp_output_dir, image)
-                    do_transfer(full_file_path, image, layer_export_folder, ftps)
-                layers_completed += 1
+            images = os.listdir(tmpdir)
+            print("Copying layer files to server...")
+            for image in images:
+                full_file_path = '{}/{}'.format(tmpdir, image)
+                do_transfer(full_file_path, image, layer_output_root, ftps)
 
 
 def render_movie():

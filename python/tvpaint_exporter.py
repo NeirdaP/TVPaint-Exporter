@@ -87,7 +87,7 @@ def get_server_output_roots(tokens):
 def parse_tokens(filename):
     # Project-specific logic to parse tokens such as shot etc as needed from filename
     tokens = {}
-    tokens["project"] = "PFLE_02"
+    tokens["project"] = "TWOF_02"
     tokens["sequence"] = "SQ1"
     shot = re.search("SH[0-9]{3}", filename) 
     tokens["shot"] = shot.group() if shot else None

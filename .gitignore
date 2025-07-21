@@ -8,6 +8,7 @@
 .ssh_key
 .ssh_key.pub
 env
+.venv
 .pytest_cache
 prof
 .vscode/

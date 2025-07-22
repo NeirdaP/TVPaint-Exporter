@@ -203,7 +203,10 @@ if __name__ == "__main__":
             curr_path = ""
             for dir in dirs:
                 curr_path = curr_path + "/" + dir
-                ftps.mkd(curr_path)
+                try:
+                    ftps.mkd(curr_path)
+                except Exception as e:
+                    print(f"Error while creating dir {curr_path} : {e}")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             if (mode == "1"):

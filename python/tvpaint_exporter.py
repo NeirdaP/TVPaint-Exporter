@@ -142,7 +142,10 @@ def render_layers():
 
                 # For now, all shot layers export to same dir regardless of clip or scene
                 layer_export_folder = "{}/{}".format(layer_output_root, layer_name_clean)
-                ftps.mkd(layer_export_folder)  
+                try:
+                    ftps.mkd(layer_export_folder)
+                except Exception as e:
+                    print(f"Error while creating dir {layer_export_folder} : {e}")
                 ftps.cwd(layer_export_folder)
 
                 images = os.listdir(tmp_output_dir)

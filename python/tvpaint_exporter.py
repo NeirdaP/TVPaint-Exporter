@@ -14,6 +14,20 @@ from pytvpaint.utils import render_context
 FTP_URL = "ftp.supamonks.com"
 FTP_CONFIG_PATH = "./ftp_config.json"
 MAX_RETRIES = 2
+PROJECT_CONFIGURATION = {
+        "name" : "4PFLE003",
+        "sequence" : "SQ01",
+        "task" : "Clean anim",
+        "server_output_templates" : [
+            "/5_COMPOSITING/{shot}/RENDER_LAYERS",
+            "/2_ANIMATION/{shot}/OUTPUTS"
+            ],
+        "shot_regex": "SH[0-9]{3}",
+        "kitsu_url": "https://kitsu.supamonks.com/",
+        "kitsu_username": "supaservice@supamonks.com",
+        "kitsu_password": "8dGYZqby!$JqWy",
+        "kitsu_new_status": "To Check",
+}
 
 
 # Lifted from https://stackoverflow.com/questions/33438456/python-ftps-upload-error-425-unable-to-build-data-connection-operation-not-per
@@ -79,17 +93,18 @@ def get_server_output_roots(tokens):
         input()
         sys.exit(0)
     
+    server_output_template = PROJECT_CONFIGURATION.get("server_output_templates")
+    
     # Paths start from root of the FTP server
-    return ("/5_COMPOSITING/{}/RENDER_LAYERS".format(shot), 
-            "/2_ANIMATION/{}/OUTPUTS".format(shot))
+    return (output.replace("{shot}", shot) for output in server_output_template)
 
 
 def parse_tokens(filename):
     # Project-specific logic to parse tokens such as shot etc as needed from filename
     tokens = {}
-    tokens["project"] = "TWOF_02"
-    tokens["sequence"] = "SQ1"
-    shot = re.search("SH[0-9]{3}", filename) 
+    tokens["project"] = PROJECT_CONFIGURATION.get("name")
+    tokens["sequence"] = PROJECT_CONFIGURATION.get("sequence")
+    shot = re.search(PROJECT_CONFIGURATION.get("shot_regex"), filename) 
     tokens["shot"] = shot.group() if shot else None
     return tokens
 
@@ -98,10 +113,10 @@ def publish_to_kitsu(filepath, tokens):
     """
     Seek the related animation task, create comment and upload media
     """
-    kitsu_url = "https://kitsu.supamonks.com/"
+    kitsu_url = PROJECT_CONFIGURATION.get("kitsu_url")
     gazu.set_host("{}/api".format(kitsu_url))
     gazu.set_event_host(kitsu_url)
-    gazu.log_in("supaservice@supamonks.com", "8dGYZqby!$JqWy")
+    gazu.log_in(PROJECT_CONFIGURATION.get("kitsu_username"), PROJECT_CONFIGURATION.get("kitsu_password"))
 
     # Seek the current shot from the project and retrieve its tasks
     proj = gazu.project.get_project_by_name(tokens.get("project"))
@@ -109,9 +124,9 @@ def publish_to_kitsu(filepath, tokens):
     shot = gazu.shot.get_shot_by_name(seq, tokens.get("shot"))
     tasks = gazu.task.all_tasks_for_shot(shot)
 
-    task_to_update = [task for task in tasks if task.get("task_type_name") == "Animation"][0]
-    to_check_status = gazu.task.get_task_status_by_name("To Check")
-    comment = gazu.task.add_comment(task_to_update, to_check_status, 
+    task_to_update = [task for task in tasks if task.get("task_type_name") == PROJECT_CONFIGURATION.get("task")][0]
+    new_status = gazu.task.get_task_status_by_name(PROJECT_CONFIGURATION.get("kitsu_new_status"))
+    comment = gazu.task.add_comment(task_to_update, new_status, 
                                     comment="Uploaded by TVpaint render layer export tool")
     gazu.task.add_preview(
         task_to_update,

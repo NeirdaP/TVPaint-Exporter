@@ -19,7 +19,7 @@ PROJECT_CONFIGURATION = {
         "sequence" : "SQ01",
         "task" : "Clean anim",
         "server_output_templates" : [
-            "/5_COMPOSITING/{shot}/RENDER_LAYERS",
+            "/7_COMPOSITING/{shot}/RENDER_LAYERS",
             "/2_ANIMATION/{shot}/OUTPUTS"
             ],
         "shot_regex": "SH[0-9]{3}",

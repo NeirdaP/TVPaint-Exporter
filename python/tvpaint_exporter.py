@@ -15,11 +15,11 @@ FTP_URL = "ftp.supamonks.com"
 FTP_CONFIG_PATH = "./ftp_config.json"
 MAX_RETRIES = 2
 PROJECT_CONFIGURATION = {
-        "name" : "4PFLE003",
-        "sequence" : "SQ01",
-        "task" : "Clean anim",
+        "name" : "ZLAN",
+        "sequence" : "SEQ1",
+        "task" : "Clean Anim",
         "server_output_templates" : [
-            "/7_COMPOSITING/{shot}/RENDER_LAYERS",
+            "/5_COMPOSITING/{shot}/RENDER_LAYERS",
             "/2_ANIMATION/{shot}/OUTPUTS"
             ],
         "shot_regex": "SH[0-9]{3}",

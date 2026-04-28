@@ -42,31 +42,34 @@ class Explicit_FTP_TLS(ftplib.FTP_TLS):
         return conn, size
 
 
-def do_transfer(filepath, output_name, curr_dir, conn):
-    attempts = 0
+def do_transfer(filepath, output_name, curr_dir, conn, attempts=0):
     try:
-        file = open(filepath,'rb')
-        ftps.storbinary('STOR {}'.format(output_name), file)
-        file.close()
-    except OSError as e:
-        if attempts < MAX_RETRIES:
-            attempts += 1 
+        with open(filepath, 'rb') as file:
+            conn.storbinary('STOR {}'.format(output_name), file)
 
-            print("FTP Connection Error Occurred")
-            print("Attempting FTP reconnect...")
-            try:
-                conn.quit()
-            except ConnectionResetError:
-                print("Connection was already closed")
-            # allow OS to release port
-            time.sleep(2)
-            conn.connect(FTP_URL)
-            conn.login(ftp_user, ftp_password)
-            conn.prot_p()
-            conn.cwd('{}'.format(curr_dir))
-            print("FTP connection has been reset")
+    # We're catching these exceptions that mainly indicate a loss of server connection
+    except (OSError, EOFError, ftplib.error_temp, ftplib.error_proto) as e:
+        if attempts >= MAX_RETRIES:
+            print(f"Failure after {MAX_RETRIES} retries for {output_name} : {e}")
+            raise
 
-            do_transfer(filepath, output_name, curr_dir, conn)
+        print(f"FTP Connection Error Occurred on {output_name} : {e}")
+        print("Attempting FTP reconnect...")
+        try:
+            conn.close()
+        except ConnectionResetError:
+            print("Connection was already closed")
+
+        # allow OS to release port
+        time.sleep(2)
+        conn.connect(FTP_URL)
+        conn.login(ftp_user, ftp_password)
+        conn.set_pasv(True)
+        conn.prot_p()
+        conn.cwd(curr_dir)
+        print("FTP connection has been reset")
+
+        do_transfer(filepath, output_name, curr_dir, conn, attempts=attempts + 1)
 
 
 def get_user_ftp_login_info():

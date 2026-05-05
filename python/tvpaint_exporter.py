@@ -146,6 +146,11 @@ def render_layers():
         for clip in scene.clips:
             layers_completed = 1
             for layer in clip.layers:
+                if not layer.is_visible:
+                    print("Layer {} is hidden in scene, skipping".format(layer.name))
+                    layers_completed += 1
+                    continue
+
                 layer_name_clean = layer.name.replace(" ", "_")
                 print("Processing layer {} ({}/{})...".format(layer_name_clean, layers_completed, len(list(clip.layers))))
                 tmp_output_dir = os.path.join(tmpdir, layer_name_clean)

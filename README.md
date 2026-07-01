@@ -13,9 +13,7 @@ It a provided as-is and no support or maintenance will be operated.
 # TVPaint Exporter
 
 ## Documentation
-Developer: https://supadocs.supamonks.com/books/tv-paint-exporter
-
-User: https://supadocs.supamonks.com/books/tools-internes/page/tv-paint-exporter-WmQ
+See files in `docs` folder
 
 ## Resources
 https://brunchstudio.github.io/pytvpaint/

@@ -1,14 +1,16 @@
 # TV Paint Exporter
 
-Découvrons l'outil d'export de layers TV Paint à Supamonks du point de vue du département R&amp;D.
+
 
 ## Vue d’ensemble
 
-L'outil d'export de layers TV Paint a été créé suite à la demande de la production WOF pour permettre aux artistes 2D à distance travaillant sur tablettes, et donc en dehors du réseau Supamonks, de publier leur travail directement sur le lecteur partagé M:/.
+### Fonctionnement
 
 Le script connecte une machine distante au réseau Supa à l'aide d'un tunnel FTP, restitue tous les layers de tous les clips et scènes du projet TV Paint actuellement ouvert, ainsi qu'une compilation mp4 de tous les layers de la scène dans un dossier temporaire, copie le contenu de ce dossier dans un endroit prédéterminé sur le lecteur M, et publie enfin le mp4 avec un commentaire sur une tâche prédéterminée dans Kitsu.
 
-Plus tard, il a été complété pour qu'on puisse l'utiliser sans tunnel FTP et sans Kitsu (voir § Configuration)
+### Historique
+
+L'outil a été créé suite à la demande de la production WOF pour permettre aux artistes 2D à distance travaillant sur tablettes, et donc en dehors du réseau Supamonks, de publier leur travail directement sur le lecteur partagé M:/. Plus tard, il a été complété pour qu'on puisse l'utiliser sans tunnel FTP et sans Kitsu (voir § Configuration)
 
 ## Prérequis
 

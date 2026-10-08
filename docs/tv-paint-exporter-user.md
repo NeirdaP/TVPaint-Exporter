@@ -2,7 +2,7 @@
 
 ## Installation  
 
-Les utilisateurs recevront un dossier contenant trois fichiers:
+Les utilisateurs recoivent un dossier contenant trois fichiers:
 - le plugin tvpaint-rpc (tvpaint-rpc-1.0.0.dll)
 - l'exécutable de l'outil (tvpaint_exporter.exe)
 - un fichier ftp_config.json (uniquement si le studio a mis en place un serveur FTP)

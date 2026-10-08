@@ -12,8 +12,10 @@ It a provided as-is and no support or maintenance will be operated.
 
 # TVPaint Exporter
 
-## Documentation
-See files in `docs` folder
+## Presentation
+The TVPaint Exporter allow users to export every layer from a TVPaint file at a predefined location.
+
+For more information, see files in `docs` folder
 
 ## Resources
 https://brunchstudio.github.io/pytvpaint/

@@ -14,25 +14,23 @@ import pytvpaint.george
 from pytvpaint.project import Project
 from pytvpaint.utils import render_context
 
-FTP_URL = "ftp.supamonks.com"
+FTP_URL = ""
 FTP_CONFIG_PATH = "./ftp_config.json"
-MAX_RETRIES = 2
-USE_FTPS = False
 PROJECT_CONFIGURATION: dict[str, Union[str, list[str], bool]] = {
-        "name" : "TWOK",
-        "sequence" : "SEQ1",
-        "task" : "Clean Anim",
         "server_output_templates" : [
             "TWOK_01/6_Compositing/{shot}/Layers",
             "TWOK_01/4_Animation/{shot}/Outputs"
             ],
         "shot_regex": "SH[0-9]{3}",
+        "transfer_strategy" : "FileSystem",
         "need_upload_to_kitsu": False,
-        "kitsu_url": "https://kitsu.supamonks.com/",
-        "kitsu_username": "supaservice@supamonks.com",
-        "kitsu_password": "8dGYZqby!$JqWy",
-        "kitsu_new_status": "To Check",
-        "transfer_strategy" : "FileSystem"
+        "kitsu_project_name" : "",
+        "kitsu_sequence" : "",
+        "kitsu_task" : "",
+        "kitsu_url": "",
+        "kitsu_username": "",
+        "kitsu_password": "",
+        "kitsu_new_status": "To Check"
 }
 SERVER_CONFIGURATION: dict[str, str] = {
     "server_root" : "M:/ULF_FAB/"
@@ -162,7 +160,6 @@ class FileSystemTransferStrategy(TransferStrategy):
         server_root = SERVER_CONFIGURATION.get("server_root")
         return (f"{server_root}/{output}" for output in server_output_templates)
 
-
 # Lifted from https://stackoverflow.com/questions/33438456/python-ftps-upload-error-425-unable-to-build-data-connection-operation-not-per
 class Explicit_FTP_TLS(ftplib.FTP_TLS):
     """Explicit FTPS, with shared TLS session"""
@@ -177,8 +174,8 @@ class Explicit_FTP_TLS(ftplib.FTP_TLS):
 def parse_tokens(filename: str) -> dict[str, str]:
     # Project-specific logic to parse tokens such as shot etc as needed from filename
     tokens = {}
-    tokens["project"] = PROJECT_CONFIGURATION.get("name")
-    tokens["sequence"] = PROJECT_CONFIGURATION.get("sequence")
+    tokens["project"] = PROJECT_CONFIGURATION.get("kitsu_project_name")
+    tokens["sequence"] = PROJECT_CONFIGURATION.get("kitsu_sequence")
     shot = re.search(PROJECT_CONFIGURATION.get("shot_regex"), filename) 
     tokens["shot"] = shot.group() if shot else None
     return tokens
@@ -208,7 +205,7 @@ def upload_to_kitsu(filepath: str, tokens: dict[str, str]) -> None:
         preview_file_path=filepath
     )
 
-def render_layers(transfer_strategy: TransferStrategy):
+def render_layers_as_PNGs(transfer_strategy: TransferStrategy):
     """
     Render each layer in project to tmp dir, then copy to server
     """
@@ -244,6 +241,28 @@ def render_layers(transfer_strategy: TransferStrategy):
                 layers_completed += 1
 
     print("Done exporting all layers in the project")
+
+def render_layers_as_PSDs(transfer_strategy: TransferStrategy):
+    """
+    Render each frame in project to tmp dir, then copy to server
+    """
+    for scene in project.scenes:
+        for clip in scene.clips:
+            for frame in range(project.start_frame, project.end_frame+1):
+                tmp_output_path = os.path.join(tmpdir, "{}.{}.psd".format(
+                    os.path.splitext(filename)[0].replace(" ", "_"), "{:04d}".format(frame)))
+                with render_context(background_mode=pytvpaint.george.BackgroundMode.NONE):
+                    try:
+                        print("Rendering frame {} of {}".format(frame, project.end_frame))
+                        clip.render(output_path=tmp_output_path, start=frame, end=frame)
+                    except Exception as e:
+                        print("Failed to export clip: {}".format(e))
+                        continue
+
+        images = os.listdir(tmpdir)
+        print("Copying layer files to server...")
+        for image in images:
+            transfer_strategy.do_transfer(f"{tmpdir}/{image}", layer_output_root, image)
 
 def render_movie(transfer_strategy: TransferStrategy, need_upload_to_kitsu: bool):
     """
@@ -286,18 +305,23 @@ if __name__ == "__main__":
         tokens,
         PROJECT_CONFIGURATION.get("server_output_templates")
     )
-    
-    # Prompt the user for which mode to run the tool in 
-    mode = None
-    while (mode not in ["1", "2"]):
-        print("Sélectionnez un mode:\n1 - Render Layers and Anim Movie\n2 - Render Anim Movie Only")
-        mode = input()
 
     for path in [layer_output_root, movie_output_root]:
         transfer_strategy.ensure_all_directories_on_path_exist(path)
+    
+    # Prompt the user for which mode to run the tool in 
+    mode = None
+    while (mode not in ["1", "2", "3"]):
+        print("Sélectionnez un mode:")
+        print("1 - Render Layers as PNGs and Anim Movie")
+        print("2 - Render Layers as PSDs and Anim Movie")
+        print("3 - Render Anim Movie Only")
+        mode = input()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         if (mode == "1"):
-            render_layers(transfer_strategy)
+            render_layers_as_PNGs(transfer_strategy)
+        elif (mode == "2"):
+            render_layers_as_PSDs(transfer_strategy)
         render_movie(transfer_strategy, need_upload_to_kitsu=PROJECT_CONFIGURATION.get("need_upload_to_kitsu"))
         
